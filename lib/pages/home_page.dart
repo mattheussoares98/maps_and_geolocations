@@ -21,13 +21,24 @@ class _HomePageState extends State<HomePage> {
   LatLng? _userPosition;
   Set<Marker> markers = {};
 
-  _moveCamera({required bool isUserPosition}) async {
+  _validatePermissionToLocation() async {
+    //pra conseguir validar se o usuário permitiu que o APP tenha acesso à localização,
+    //precisa instalar a dependência "permission_handler" e usar conforme nessa função
+
     bool isGranted = await Permission.location.isGranted;
+    //verifica se o usuário permitiu o acesso à localização
 
     if (!isGranted) {
       await Permission.location.request();
+      //pede novamente o acesso à localização
     }
 
+    if (!isGranted) {
+      return;
+    }
+  }
+
+  _moveCamera({required bool isUserPosition}) async {
     //método para mover a câmera. Está chamando esse método no floatingActionButton
     GoogleMapController _googleMapController = await _controller.future;
 
@@ -66,6 +77,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   _getUserLocation() async {
+    await _validatePermissionToLocation();
+
     Position position = await Geolocator.getCurrentPosition();
 
     double latitude = position.latitude;
@@ -89,6 +102,7 @@ class _HomePageState extends State<HomePage> {
       onTap: () => print('Clicou no marcador da última localização carregada'),
       rotation: 45,
     );
+
     setState(() {
       markers.add(_userMarker);
     });
@@ -111,6 +125,7 @@ class _HomePageState extends State<HomePage> {
         mapType: MapType.normal,
         initialCameraPosition: const CameraPosition(
           target: LatLng(-23.547374, -46.641267),
+          zoom: 8,
         ),
         onMapCreated: (GoogleMapController controller) {
           _controller.complete(controller);
