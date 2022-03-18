@@ -1,3 +1,14 @@
+///Possui dois métodos para pegar a localização atual do usuário. Uma pega através
+////de um stream, portanto vai atualizando a localização do usuário de tempo em
+///tempo e outra pega a localização quando o método é chamado
+
+//pra funcionar precisa instalar duas dependências:
+//1: google_maps_flutter
+//2: permission_handler
+///o google_maps_flutter não possui opção pra solicitar acesso à localização
+////novamente caso o usuário negue o acesso. Por isso adicionei essa outra
+///dependência pra conseguir solicitar novamente
+
 import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
@@ -11,17 +22,15 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-// ignore: prefer_const_constructors
-
-LatLng _position = const LatLng(0, 0);
+LatLng? _userPosition;
 
 class _HomePageState extends State<HomePage> {
+  LatLng _position = const LatLng(0, 0);
   final Completer<GoogleMapController> _controller = Completer();
 
-  LatLng? _userPosition;
   Set<Marker> markers = {};
 
-  _validatePermissionToLocation() async {
+  Future<bool> _validatePermissionToLocation() async {
     //pra conseguir validar se o usuário permitiu que o APP tenha acesso à localização,
     //precisa instalar a dependência "permission_handler" e usar conforme nessa função
 
@@ -33,27 +42,20 @@ class _HomePageState extends State<HomePage> {
       //pede novamente o acesso à localização
     }
 
-    if (!isGranted) {
-      return;
-    }
+    return isGranted;
   }
 
   _moveCamera({required bool isUserPosition}) async {
     //método para mover a câmera. Está chamando esse método no floatingActionButton
     GoogleMapController _googleMapController = await _controller.future;
 
-    await _getUserLocation();
-    //só chama esse método pra pegar a localização atual, caso o usuário tenha
-    //permitido o acesso à localização do dispositivo
-
-    if (isUserPosition) {
-      //se não houver marcação, não executa
+    if (isUserPosition && _userPosition != null) {
       _googleMapController.moveCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
             target:
                 _userPosition!, //posição que a câmera vai ficar quando chamar o método.
-            //Nesse caso vai sempre pra posição que ficou marcada no mapa
+            //Nesse caso vai sempre pra localização atual do usuário
             bearing: 90, //inclinação da câmera (em graus)
             tilt: 90, //rotacionar a câmera (em graus)
             zoom: 16,
@@ -77,14 +79,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   _getUserLocation() async {
-    await _validatePermissionToLocation();
+    //pega a localização atual do usuário e adiciona um marcador pra essa localização
 
-    Position position = await Geolocator.getCurrentPosition();
+    bool havePermission = await _validatePermissionToLocation();
+    if (!havePermission) {
+      return;
+    }
 
-    double latitude = position.latitude;
-    double longitude = position.longitude;
+    Position currentPosition = await Geolocator.getCurrentPosition();
 
-    _userPosition = LatLng(latitude, longitude);
+    _userPosition = LatLng(
+      currentPosition.latitude,
+      currentPosition.longitude,
+    );
 
     Marker _userMarker = Marker(
       markerId: const MarkerId('userPosition'),
@@ -108,10 +115,34 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _getUserLocationStream() async {
+    //pega a localização do usuário a partir de um stream
+    //atualiza de tempo em tempo a localização
+    bool havePermission = await _validatePermissionToLocation();
+    if (!havePermission) {
+      return;
+    }
+
+    Geolocator.getPositionStream(
+      distanceFilter:
+          10, //distância que o usuário precisa se mover pra receber uma
+      //notificação. O ideal é colocar algum valor, pois de padrão o valor
+      //é 0 e com isso vai atualizar muito, fazendo com que gaste muitos
+      //recursos do celular (bateria, internet, etc)
+      intervalDuration: const Duration(
+          seconds:
+              5), //de quanto em quanto tempo vai atualizar a localização. No IOS esse valor é ignorado
+      desiredAccuracy: LocationAccuracy
+          .high, //Acesse a classe LocationAccuracy pra ver a precisão
+    ).listen((position) {
+      _userPosition = LatLng(position.latitude, position.longitude);
+    });
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _getUserLocation();
+    _getUserLocationStream();
   }
 
   @override
@@ -122,6 +153,7 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
       ),
       body: GoogleMap(
+        myLocationEnabled: true, //mostra a localização do usuário
         mapType: MapType.normal,
         initialCameraPosition: const CameraPosition(
           target: LatLng(-23.547374, -46.641267),
@@ -154,6 +186,8 @@ class _HomePageState extends State<HomePage> {
               // rotation: 45,
             ),
           );
+
+          print(markers);
         },
         markers: markers,
       ),
