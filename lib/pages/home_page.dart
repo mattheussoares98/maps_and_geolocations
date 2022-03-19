@@ -1,6 +1,6 @@
-///Possui dois métodos para pegar a localização atual do usuário. Uma pega através
-////de um stream, portanto vai atualizando a localização do usuário de tempo em
-///tempo e outra pega a localização quando o método é chamado
+///Possui 2 métodos para pegar a localização atual do usuário
+///1º: Pega através de um stream, portanto vai atualizando a localização do usuário de tempo em tempo
+///2º: Pega a localização quando o método é chamado
 
 //pra funcionar precisa instalar duas dependências:
 //1: google_maps_flutter
