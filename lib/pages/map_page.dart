@@ -11,73 +11,83 @@
 
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class MapPage extends StatefulWidget {
-  const MapPage({Key? key}) : super(key: key);
+  final LatLng? latLgn;
+  const MapPage({
+    Key? key,
+    this.latLgn,
+  }) : super(key: key);
 
   @override
   State<MapPage> createState() => _MapPageState();
 }
 
 LatLng? _userPosition;
+double _latitude = 0.0;
+double _longitude = 0.0;
 
 class _MapPageState extends State<MapPage> {
-  LatLng _position = const LatLng(0, 0);
   final Completer<GoogleMapController> _controller = Completer();
 
   Set<Marker> markers = {};
+  bool isMarked = false;
 
-  Future _addMarker(LatLng latLng) async {
+  Future _addMarkerAndSaveOnFirebase(LatLng latLng) async {
     FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+    _latitude = latLng.latitude;
+    _longitude = latLng.longitude;
+
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(latLng.latitude, latLng.longitude);
+
+    var placeMarkItem = placemarks[0];
+
+    String streetInformations =
+        '${placeMarkItem.street}, ${placeMarkItem.subThoroughfare}';
+
+    String localeInformations =
+        '${placeMarkItem.subAdministrativeArea}, ${placeMarkItem.administrativeArea}, ${placeMarkItem.isoCountryCode}';
 
     await firestore.collection('places').add({
       'latitude': latLng.latitude,
       'longitude': latLng.longitude,
+      'streetInformations': streetInformations,
+      'localeInformations': localeInformations,
     });
-
-    GoogleMapController _googleMapController = await _controller.future;
 
     setState(() {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('userPosition'),
-          position: LatLng(
-              latLng.latitude,
-              latLng
-                  .longitude), //fiz essa condição pra quando iniciar o mapa, não estar já com um local marcado
-          infoWindow: const InfoWindow(
-              snippet: 'Última localização carregada pelo APP',
-              title: 'Sua última localização'),
-          // icon: BitmapDescriptor.defaultMarkerWithHue(
-          //   BitmapDescriptor.hueAzure, //cor do ícone de marcação
-          // ),
-          // ignore: avoid_print
-          onTap: () =>
-              print('Clicou no marcador da última localização carregada'),
-          rotation: 45,
-        ),
-      );
+      if (isMarked == false) {
+        markers.add(
+          Marker(
+            markerId: const MarkerId('userPosition'),
+            position: LatLng(
+                latLng.latitude,
+                latLng
+                    .longitude), //fiz essa condição pra quando iniciar o mapa, não estar já com um local marcado
+            infoWindow: const InfoWindow(
+                snippet: 'Última localização carregada pelo APP',
+                title: 'Sua última localização'),
+            // icon: BitmapDescriptor.defaultMarkerWithHue(
+            //   BitmapDescriptor.hueAzure, //cor do ícone de marcação
+            // ),
+            // ignore: avoid_print
+            onTap: () =>
+                print('Clicou no marcador da última localização carregada'),
+            rotation: 45,
+          ),
+        );
+      }
     });
 
-    _googleMapController.moveCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: LatLng(
-              latLng.latitude,
-              latLng
-                  .longitude), //posição que a câmera vai ficar quando chamar o método.
-          //Nesse caso vai sempre pra localização atual do usuário
-          bearing: 90, //inclinação da câmera (em graus)
-          tilt: 90, //rotacionar a câmera (em graus)
-          zoom: 12,
-        ),
-      ),
-    );
+    _moveCamera(latLng: latLng);
+    isMarked = true;
   }
 
   Future<bool> _validatePermissionToLocation() async {
@@ -88,44 +98,29 @@ class _MapPageState extends State<MapPage> {
     //verifica se o usuário permitiu o acesso à localização
 
     if (!isGranted) {
-      await Permission.location.request();
+      if (widget.latLgn != null) await Permission.location.request();
       //pede novamente o acesso à localização
     }
 
     return isGranted;
   }
 
-  _moveCamera({required bool isUserPosition}) async {
+  _moveCamera({required LatLng latLng}) async {
     //método para mover a câmera. Está chamando esse método no floatingActionButton
     GoogleMapController _googleMapController = await _controller.future;
 
-    if (isUserPosition && _userPosition != null) {
-      _googleMapController.moveCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target:
-                _userPosition!, //posição que a câmera vai ficar quando chamar o método.
-            //Nesse caso vai sempre pra localização atual do usuário
-            bearing: 90, //inclinação da câmera (em graus)
-            tilt: 90, //rotacionar a câmera (em graus)
-            zoom: 16,
-          ),
+    _googleMapController.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target:
+              latLng, //posição que a câmera vai ficar quando chamar o método.
+          //Nesse caso vai sempre pra localização atual do usuário
+          bearing: 0, //inclinação da câmera (em graus)
+          tilt: 0, //rotacionar a câmera (em graus)
+          zoom: 16,
         ),
-      );
-    } else if (_position != const LatLng(0, 0)) {
-      _googleMapController.moveCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target:
-                _position, //posição que a câmera vai ficar quando chamar o método.
-            //Nesse caso vai sempre pra posição que ficou marcada no mapa
-            bearing: 90, //inclinação da câmera (em graus)
-            tilt: 90, //rotacionar a câmera (em graus)
-            zoom: 16,
-          ),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   // _getUserLocation() async {
@@ -191,13 +186,11 @@ class _MapPageState extends State<MapPage> {
 
   @override
   void didChangeDependencies() {
-    LatLng latLngMarked = ModalRoute.of(context)!.settings.arguments as LatLng;
-    if (latLngMarked.latitude != 0) {
+    if (widget.latLgn != null) {
       markers.add(
         Marker(
           markerId: const MarkerId('userPosition'),
-          position:
-              latLngMarked, //fiz essa condição pra quando iniciar o mapa, não estar já com um local marcado
+          position: widget.latLgn!,
           infoWindow: const InfoWindow(
             title: 'Localização marcada',
             snippet: 'Local de marcação',
@@ -211,6 +204,8 @@ class _MapPageState extends State<MapPage> {
           rotation: 45,
         ),
       );
+
+      _moveCamera(latLng: widget.latLgn!);
     }
     super.didChangeDependencies();
     _getUserLocationStream();
@@ -237,12 +232,14 @@ class _MapPageState extends State<MapPage> {
         },
         minMaxZoomPreference: const MinMaxZoomPreference(10, 20),
         onLongPress: (LatLng position) {
-          _addMarker(
-            LatLng(
-              position.latitude,
-              position.longitude,
-            ),
-          );
+          if (isMarked == false && widget.latLgn == null) {
+            _addMarkerAndSaveOnFirebase(
+              LatLng(
+                position.latitude,
+                position.longitude,
+              ),
+            );
+          }
         },
         markers: markers,
       ),
@@ -254,15 +251,19 @@ class _MapPageState extends State<MapPage> {
             heroTag: 'null',
             child: const Icon(Icons.location_searching_outlined),
             onPressed: () {
-              _moveCamera(isUserPosition: true);
+              _moveCamera(latLng: _userPosition!);
             },
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
             child: const Icon(Icons.location_on),
-            onPressed: () {
-              _moveCamera(isUserPosition: false);
-            },
+            onPressed: widget.latLgn != null
+                ? () {
+                    _moveCamera(latLng: widget.latLgn!);
+                  }
+                : () {
+                    _moveCamera(latLng: LatLng(_latitude, _longitude));
+                  },
           ),
           const SizedBox(height: 30),
         ],

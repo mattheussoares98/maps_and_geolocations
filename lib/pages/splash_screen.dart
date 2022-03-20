@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:maps_and_geolocations/pages/home_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -16,13 +15,14 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
 
     Firebase.initializeApp();
+  }
 
-    Timer(const Duration(seconds: 3), () {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const HomePage(),
-        ),
-      );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    Future.delayed(const Duration(seconds: 3), () {
+      Navigator.of(context).pushReplacementNamed('/homePage');
     });
   }
 

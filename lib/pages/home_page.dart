@@ -40,70 +40,76 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text('Minhas localizações'),
-      ),
-      body: Column(
-        children: [
-          StreamBuilder<QuerySnapshot>(
-            stream: _streamController.stream,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.active) {
-                return const Center(
-                  child: CircularProgressIndicator(),
-                );
-              } else {
-                List<DocumentSnapshot> listItems = snapshot.data!.docs.toList();
+    return WillPopScope(
+      onWillPop: () async {
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: const Text(''),
+          centerTitle: true,
+          title: const Text('Minhas localizações'),
+        ),
+        body: Column(
+          children: [
+            StreamBuilder<QuerySnapshot>(
+              stream: _streamController.stream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.active) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                } else {
+                  List<DocumentSnapshot> listItems =
+                      snapshot.data!.docs.toList();
 
-                return Expanded(
-                  child: ListView.builder(
-                      itemCount: listItems.length,
-                      itemBuilder: (context, index) {
-                        var id = listItems[index].id;
-                        return Card(
-                          elevation: 5,
-                          child: ListTile(
-                            onTap: () {
-                              Navigator.of(context).pushNamed(
-                                'mapPage',
-                                arguments: LatLng(
-                                  listItems[index]['latitude'],
-                                  listItems[index]['longitude'],
-                                ),
-                              );
-                            },
-                            title:
-                                Text('Localização ' + (index + 1).toString()),
-                            trailing: IconButton(
-                              onPressed: () {
-                                _deleteLocation(id);
+                  return Expanded(
+                    child: ListView.builder(
+                        itemCount: listItems.length,
+                        itemBuilder: (context, index) {
+                          var id = listItems[index].id;
+                          return Card(
+                            elevation: 5,
+                            child: ListTile(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: ((context) => MapPage(
+                                          latLgn: LatLng(
+                                              listItems[index]['latitude'],
+                                              listItems[index]['longitude']),
+                                        )),
+                                  ),
+                                );
                               },
-                              icon: const Icon(
-                                Icons.delete,
-                                color: Colors.red,
+                              title:
+                                  Text(listItems[index]['streetInformations']),
+                              subtitle:
+                                  Text(listItems[index]['localeInformations']),
+                              trailing: IconButton(
+                                onPressed: () {
+                                  _deleteLocation(id);
+                                },
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      }),
-                );
-              }
-            },
-          )
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MapPage(),
-            ),
-          );
-        },
-        child: const Icon(Icons.add),
+                          );
+                        }),
+                  );
+                }
+              },
+            )
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            Navigator.of(context).pushNamed('/mapPage');
+          },
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }
